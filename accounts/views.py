@@ -2,7 +2,7 @@ from rest_framework import status, generics, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenVerifyView as BaseTokenVerifyView
+
 from django.contrib.auth import get_user_model
 from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import method_decorator
@@ -150,7 +150,7 @@ class UserLoginView(generics.GenericAPIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
-class UserProfileView(generics.RetrieveUpdateAPIView):
+class UserProfileView(generics.RetrieveAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -165,13 +165,7 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 
-    @swagger_auto_schema(
-        operation_description="Update user profile",
-        security=[{'Bearer': []}],
-        responses={200: UserSerializer}
-    )
-    def patch(self, request, *args, **kwargs):
-        return super().patch(request, *args, **kwargs)
+
 
 
 @method_decorator(ratelimit(key='ip', rate='3/m', method='POST'), name='post')
@@ -367,81 +361,10 @@ class ResendVerificationView(generics.GenericAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class CheckVerificationStatusView(generics.GenericAPIView):
-    serializer_class = ResendVerificationSerializer
-    permission_classes = [permissions.AllowAny]
 
-    @swagger_auto_schema(
-        operation_description="Check email verification status",
-        security=[],
-        responses={
-            200: openapi.Response(
-                description="Verification status",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'email': openapi.Schema(type=openapi.TYPE_STRING),
-                        'is_verified': openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                        'message': openapi.Schema(type=openapi.TYPE_STRING)
-                    }
-                )
-            ),
-            400: "Bad Request"
-        }
-    )
-    def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            email = serializer.validated_data['email']
-
-            try:
-                user = User.objects.get(email=email)
-                return Response({
-                    'email': user.email,
-                    'is_verified': user.is_verified,
-                    'message': 'Email is verified' if user.is_verified else 'Email is not verified'
-                }, status=status.HTTP_200_OK)
-
-            except User.DoesNotExist:
-                return Response({
-                    'message': 'User not found'
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class TokenVerifyView(BaseTokenVerifyView):
-    @swagger_auto_schema(
-        operation_description="Verify JWT token validity",
-        security=[],
-        responses={
-            200: openapi.Response(
-                description="Token is valid",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'message': openapi.Schema(type=openapi.TYPE_STRING),
-                        'valid': openapi.Schema(type=openapi.TYPE_BOOLEAN)
-                    }
-                )
-            ),
-            401: "Token is invalid or expired"
-        }
-    )
-    def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
-        if response.status_code == 200:
-            return Response({
-                'message': 'Token is valid',
-                'valid': True
-            }, status=status.HTTP_200_OK)
-        return response
 
 
 class HealthCheckView(generics.GenericAPIView):
-    """
-    Health check endpoint to verify service status
-    """
     permission_classes = [permissions.AllowAny]
 
     @swagger_auto_schema(
@@ -470,9 +393,6 @@ class HealthCheckView(generics.GenericAPIView):
         }
     )
     def get(self, request):
-        """
-        Return health status of the service and its dependencies
-        """
         from datetime import datetime
 
         health_status = {

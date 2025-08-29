@@ -192,14 +192,7 @@ class UserProfileTest(APITestCase):
         response = self.client.get(self.profile_url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_update_user_profile(self):
-        """Test updating user profile"""
-        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
-        update_data = {'full_name': 'Updated Name'}
-        response = self.client.patch(self.profile_url, update_data)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.user.refresh_from_db()
-        self.assertEqual(self.user.full_name, 'Updated Name')
+
 
 
 class PasswordResetTest(APITestCase):

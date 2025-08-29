@@ -152,18 +152,15 @@ Once the server is running, access the API documentation at:
 - `POST /api/v1/auth/register/` - User registration
 - `POST /api/v1/auth/login/` - User login
 - `POST /api/v1/auth/token/refresh/` - Refresh JWT token
-- `POST /api/v1/auth/token/verify/` - Verify JWT token
 
 ### User Profile (API v1)
 
 - `GET /api/v1/auth/profile/` - Get user profile
-- `PATCH /api/v1/auth/profile/` - Update user profile
 
 ### Email Verification (API v1)
 
 - `POST /api/v1/auth/verify-email/` - Verify email with token
 - `POST /api/v1/auth/resend-verification/` - Resend verification email
-- `POST /api/v1/auth/check-verification/` - Check verification status
 
 ### Password Reset (API v1)
 
@@ -271,5 +268,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Authors
 
-- **Barny Victor**  - [GitHub](http://github.com/Barnyvic)
-
+- **Barny Victor** - [GitHub](http://github.com/Barnyvic)
