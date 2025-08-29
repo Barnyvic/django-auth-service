@@ -9,6 +9,9 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
+from django.db import connection
+from django.core.cache import cache
+import redis
 
 from .serializers import (
     UserRegistrationSerializer,
@@ -433,3 +436,70 @@ class TokenVerifyView(BaseTokenVerifyView):
                 'valid': True
             }, status=status.HTTP_200_OK)
         return response
+
+
+class HealthCheckView(generics.GenericAPIView):
+    """
+    Health check endpoint to verify service status
+    """
+    permission_classes = [permissions.AllowAny]
+
+    @swagger_auto_schema(
+        operation_description="Check service health status",
+        security=[],
+        responses={
+            200: openapi.Response(
+                description="Service is healthy",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'status': openapi.Schema(type=openapi.TYPE_STRING),
+                        'timestamp': openapi.Schema(type=openapi.TYPE_STRING),
+                        'version': openapi.Schema(type=openapi.TYPE_STRING),
+                        'services': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'database': openapi.Schema(type=openapi.TYPE_STRING),
+                                'redis': openapi.Schema(type=openapi.TYPE_STRING),
+                            }
+                        )
+                    }
+                )
+            ),
+            503: "Service unavailable"
+        }
+    )
+    def get(self, request):
+        """
+        Return health status of the service and its dependencies
+        """
+        from datetime import datetime
+
+        health_status = {
+            'status': 'healthy',
+            'timestamp': datetime.utcnow().isoformat(),
+            'version': 'v1',
+            'services': {}
+        }
+
+        # Check database connection
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+            health_status['services']['database'] = 'healthy'
+        except Exception as e:
+            health_status['services']['database'] = f'unhealthy: {str(e)}'
+            health_status['status'] = 'unhealthy'
+
+        # Check Redis connection
+        try:
+            cache.set('health_check', 'ok', 10)
+            cache.get('health_check')
+            health_status['services']['redis'] = 'healthy'
+        except Exception as e:
+            health_status['services']['redis'] = f'unhealthy: {str(e)}'
+            health_status['status'] = 'unhealthy'
+
+        response_status = status.HTTP_200_OK if health_status['status'] == 'healthy' else status.HTTP_503_SERVICE_UNAVAILABLE
+
+        return Response(health_status, status=response_status)

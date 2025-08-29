@@ -143,29 +143,45 @@ Once the server is running, access the API documentation at:
 
 ## API Endpoints
 
-### Authentication
+### Health Check
 
-- `POST /api/auth/register/` - User registration
-- `POST /api/auth/login/` - User login
-- `POST /api/auth/token/refresh/` - Refresh JWT token
-- `POST /api/auth/token/verify/` - Verify JWT token
+- `GET /health/` - Service health status
 
-### User Profile
+### Authentication (API v1)
 
-- `GET /api/auth/profile/` - Get user profile
-- `PATCH /api/auth/profile/` - Update user profile
+- `POST /api/v1/auth/register/` - User registration
+- `POST /api/v1/auth/login/` - User login
+- `POST /api/v1/auth/token/refresh/` - Refresh JWT token
+- `POST /api/v1/auth/token/verify/` - Verify JWT token
 
-### Password Reset
+### User Profile (API v1)
 
-- `POST /api/auth/password-reset/` - Request password reset
-- `POST /api/auth/password-reset/confirm/` - Confirm password reset
+- `GET /api/v1/auth/profile/` - Get user profile
+- `PATCH /api/v1/auth/profile/` - Update user profile
+
+### Email Verification (API v1)
+
+- `POST /api/v1/auth/verify-email/` - Verify email with token
+- `POST /api/v1/auth/resend-verification/` - Resend verification email
+- `POST /api/v1/auth/check-verification/` - Check verification status
+
+### Password Reset (API v1)
+
+- `POST /api/v1/auth/password-reset/` - Request password reset
+- `POST /api/v1/auth/password-reset/confirm/` - Confirm password reset
 
 ## API Usage Examples
+
+### Health Check
+
+```bash
+curl -X GET http://localhost:8000/health/
+```
 
 ### User Registration
 
 ```bash
-curl -X POST http://localhost:8000/api/auth/register/ \
+curl -X POST http://localhost:8000/api/v1/auth/register/ \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -178,7 +194,7 @@ curl -X POST http://localhost:8000/api/auth/register/ \
 ### User Login
 
 ```bash
-curl -X POST http://localhost:8000/api/auth/login/ \
+curl -X POST http://localhost:8000/api/v1/auth/login/ \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -189,14 +205,14 @@ curl -X POST http://localhost:8000/api/auth/login/ \
 ### Access Protected Endpoint
 
 ```bash
-curl -X GET http://localhost:8000/api/auth/profile/ \
+curl -X GET http://localhost:8000/api/v1/auth/profile/ \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 ### Password Reset Request
 
 ```bash
-curl -X POST http://localhost:8000/api/auth/password-reset/ \
+curl -X POST http://localhost:8000/api/v1/auth/password-reset/ \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com"
@@ -213,58 +229,6 @@ python manage.py test
 coverage run --source='.' manage.py test
 coverage report
 coverage html
-```
-
-## Deployment
-
-### 🚀 Production Deployment (PostgreSQL)
-
-#### Quick Deployment Script
-
-```bash
-# Set environment variables first
-export DATABASE_URL="postgresql://user:password@host:port/database"
-export REDIS_URL="redis://host:port/db"
-export SECRET_KEY="your-secret-key"
-export BREVO_API_KEY="your-brevo-api-key"
-export FROM_EMAIL="your-email@domain.com"
-
-# Run deployment script
-python deploy.py
-# OR
-./deploy.sh
-```
-
-#### Manual Production Setup
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run migrations and setup
-python manage.py setup_production --create-superuser
-
-# Start production server
-gunicorn auth_service.wsgi:application --bind 0.0.0.0:8000 --workers 3
-```
-
-#### Platform-Specific Deployment
-
-**Render/Heroku:**
-
-- Uses `Procfile` for automatic deployment
-- Set environment variables in platform dashboard
-- Automatic migrations via `release` command
-
-**Docker Deployment:**
-
-```bash
-# Local development with PostgreSQL
-docker-compose up --build
-
-# Production Docker
-docker build -t auth-service .
-docker run -p 8000:8000 --env-file .env auth-service
 ```
 
 #### Environment Variables for Production
@@ -307,10 +271,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Authors
 
-- **Barny Victor** - _Initial work_ - [YourGitHub](http://github.com/Barnyvic)
+- **Barny Victor**  - [GitHub](http://github.com/Barnyvic)
 
-## Acknowledgments
-
-- Django REST Framework team
-- Simple JWT library contributors
-- PostgreSQL and Redis communities
