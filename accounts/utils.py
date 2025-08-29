@@ -42,7 +42,7 @@ def generate_verification_token():
 
 def store_verification_token(email, token):
     cache_key = f"email_verification:{token}"
-    cache.set(cache_key, email, timeout=86400)  # 24 hours
+    cache.set(cache_key, email, timeout=86400) 
     return True
 
 

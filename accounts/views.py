@@ -402,7 +402,6 @@ class HealthCheckView(generics.GenericAPIView):
             'services': {}
         }
 
-        # Check database connection
         try:
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
@@ -411,7 +410,6 @@ class HealthCheckView(generics.GenericAPIView):
             health_status['services']['database'] = f'unhealthy: {str(e)}'
             health_status['status'] = 'unhealthy'
 
-        # Check Redis connection
         try:
             cache.set('health_check', 'ok', 10)
             cache.get('health_check')

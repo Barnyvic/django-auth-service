@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Production deployment script for Django Auth Service
-# This script handles database migrations and static files collection
 
 set -e  # Exit on any error
 
@@ -12,9 +10,8 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m' 
 
-# Function to print colored output
 print_status() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
@@ -37,7 +34,6 @@ if [ ! -f "manage.py" ]; then
     exit 1
 fi
 
-# Check environment variables
 print_status "Checking environment variables..."
 required_vars=("SECRET_KEY" "DATABASE_URL" "REDIS_URL" "BREVO_API_KEY" "FROM_EMAIL")
 missing_vars=()
@@ -56,28 +52,23 @@ fi
 
 print_success "All required environment variables are set"
 
-# Install/update dependencies
 print_status "Installing Python dependencies..."
 pip install -r requirements.txt
 print_success "Dependencies installed"
 
-# Check database connection
 print_status "Testing database connection..."
 python manage.py check --database default
 print_success "Database connection successful"
 
-# Run migrations
 print_status "Running database migrations..."
 python manage.py makemigrations
 python manage.py migrate
 print_success "Database migrations completed"
 
-# Collect static files
 print_status "Collecting static files..."
 python manage.py collectstatic --noinput
 print_success "Static files collected"
 
-# Create superuser if needed
 if [ "${CREATE_SUPERUSER:-false}" = "true" ]; then
     print_status "Creating superuser..."
     python -c "
@@ -107,32 +98,30 @@ else:
     print_success "Superuser setup completed"
 fi
 
-# Run tests if requested
 if [ "${RUN_TESTS:-false}" = "true" ]; then
     print_status "Running tests..."
     python manage.py test --verbosity=1
     print_success "All tests passed"
 fi
 
-# Final status
-print_success "🎉 Deployment completed successfully!"
+print_success "Deployment completed successfully!"
 print_status "Your Django Auth Service is ready for production!"
 
 # Display useful information
 echo ""
-echo "📋 Deployment Summary:"
-echo "  ✅ Dependencies installed"
-echo "  ✅ Database migrations applied"
-echo "  ✅ Static files collected"
+echo " Deployment Summary:"
+echo " Dependencies installed"
+echo " Database migrations applied"
+echo " Static files collected"
 if [ "${CREATE_SUPERUSER:-false}" = "true" ]; then
-    echo "  ✅ Superuser created"
+    echo " Superuser created"
 fi
 if [ "${RUN_TESTS:-false}" = "true" ]; then
-    echo "  ✅ Tests passed"
+    echo " Tests passed"
 fi
 
 echo ""
-echo "🔗 Next steps:"
+echo "Next steps:"
 echo "  • Start your web server: gunicorn auth_service.wsgi:application"
 echo "  • Access admin panel: /admin/"
 echo "  • API documentation: /swagger/"

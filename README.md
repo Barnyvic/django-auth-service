@@ -103,13 +103,10 @@ The entrypoint script will automatically:
 2. **Manual operations (if needed)**
 
 ```bash
-# Run migrations manually
 docker-compose exec web python manage.py migrate
 
-# Create superuser manually
 docker-compose exec web python manage.py createsuperuser
 
-# Access container shell
 docker-compose exec web bash
 ```
 
@@ -118,22 +115,17 @@ docker-compose exec web bash
 Create a `.env` file in the project root with the following variables:
 
 ```env
-# Django Settings
 SECRET_KEY=your-secret-key-here
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
 
-# Database Configuration
 DATABASE_URL=postgresql://username:password@localhost:5432/auth_service_db
 
-# Redis Configuration
 REDIS_URL=redis://localhost:6379/0
 
-# JWT Settings
 JWT_ACCESS_TOKEN_LIFETIME=60
 JWT_REFRESH_TOKEN_LIFETIME=1440
 
-# Email Settings (for password reset)
 EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587

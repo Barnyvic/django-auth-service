@@ -1,8 +1,4 @@
 
-"""
-Production deployment script for Django Auth Service
-Handles database migrations, static files, and other deployment tasks
-"""
 
 import os
 import sys
