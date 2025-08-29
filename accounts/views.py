@@ -97,7 +97,7 @@ class UserLoginView(generics.GenericAPIView):
     permission_classes = [permissions.AllowAny]
 
     @swagger_auto_schema(
-        operation_description="Login user and get JWT tokens",
+        operation_description="Login user and get JWT tokens. Email must be verified to login.",
         security=[],
         responses={
             200: openapi.Response(
@@ -111,8 +111,9 @@ class UserLoginView(generics.GenericAPIView):
                     }
                 )
             ),
-            400: "Bad Request",
-            401: "Unauthorized"
+            400: "Invalid credentials",
+            403: "Email not verified",
+            423: "Account locked"
         }
     )
     def post(self, request, *args, **kwargs):
@@ -132,6 +133,13 @@ class UserLoginView(generics.GenericAPIView):
         if serializer.is_valid():
             user = serializer.validated_data['user']
 
+            if not user.is_verified:
+                return Response({
+                    'message': 'Please verify your email address before logging in. Check your email for verification instructions.',
+                    'email_verified': False,
+                    'email': user.email
+                }, status=status.HTTP_403_FORBIDDEN)
+
             reset_login_attempts(user)
 
             tokens = get_tokens_for_user(user)
@@ -146,6 +154,24 @@ class UserLoginView(generics.GenericAPIView):
             if email:
                 try:
                     user = User.objects.get(email=email)
+
+                    # Check if user exists and password is correct but not verified
+                    from django.contrib.auth import authenticate
+                    auth_user = authenticate(
+                        request=request,
+                        username=email,
+                        password=request.data.get('password')
+                    )
+
+                    if auth_user and not auth_user.is_verified:
+                        # Don't count as failed attempt if credentials are correct but not verified
+                        return Response({
+                            'message': 'Please verify your email address before logging in. Check your email for verification instructions.',
+                            'email_verified': False,
+                            'email': user.email
+                        }, status=status.HTTP_403_FORBIDDEN)
+
+                    # Only count as failed attempt if credentials are actually wrong
                     lock_account(user)
 
                     if user.failed_login_attempts >= 3:
@@ -387,6 +413,50 @@ class ResendVerificationView(generics.GenericAPIView):
 
                 return Response({
                     'message': 'Verification email sent successfully'
+                }, status=status.HTTP_200_OK)
+
+            except User.DoesNotExist:
+                # Don't reveal if user exists or not for security
+                return Response({
+                    'message': 'If an account with this email exists, a verification email has been sent.'
+                }, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CheckVerificationStatusView(generics.GenericAPIView):
+    serializer_class = ResendVerificationSerializer
+    permission_classes = [permissions.AllowAny]
+
+    @swagger_auto_schema(
+        operation_description="Check email verification status",
+        security=[],
+        responses={
+            200: openapi.Response(
+                description="Verification status",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'email': openapi.Schema(type=openapi.TYPE_STRING),
+                        'is_verified': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING)
+                    }
+                )
+            ),
+            400: "Bad Request"
+        }
+    )
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+
+            try:
+                user = User.objects.get(email=email)
+                return Response({
+                    'email': user.email,
+                    'is_verified': user.is_verified,
+                    'message': 'Email is verified' if user.is_verified else 'Email is not verified'
                 }, status=status.HTTP_200_OK)
 
             except User.DoesNotExist:
