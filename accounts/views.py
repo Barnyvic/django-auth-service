@@ -19,31 +19,14 @@ from .serializers import (
     EmailVerificationSerializer,
     ResendVerificationSerializer
 )
-from .utils import (
-    generate_reset_token,
-    store_reset_token,
-    verify_reset_token,
-    invalidate_reset_token,
-    generate_verification_token,
-    store_verification_token,
-    verify_verification_token,
-    invalidate_verification_token,
-    is_account_locked,
-    lock_account,
-    reset_login_attempts,
-    get_client_ip
+from .services import (
+    AuthenticationService,
+    EmailVerificationService,
+    PasswordResetService,
+    UserService
 )
-from .email_service import send_verification_email, send_welcome_email, send_password_reset_email
 
 User = get_user_model()
-
-
-def get_tokens_for_user(user):
-    refresh = RefreshToken.for_user(user)
-    return {
-        'refresh': str(refresh),
-        'access': str(refresh.access_token),
-    }
 
 
 @method_decorator(ratelimit(key='ip', rate='5/m', method='POST'), name='post')
@@ -73,13 +56,13 @@ class UserRegistrationView(generics.CreateAPIView):
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.save()
-            tokens = get_tokens_for_user(user)
+            user, tokens = AuthenticationService.register_user(
+                email=serializer.validated_data['email'],
+                full_name=serializer.validated_data['full_name'],
+                password=serializer.validated_data['password'],
+                request=request
+            )
             user_data = UserSerializer(user).data
-
-            verification_token = generate_verification_token()
-            store_verification_token(user.email, verification_token)
-            send_verification_email(user, verification_token, request)
 
             return Response({
                 'message': 'User registered successfully. Please check your email to verify your account.',
@@ -118,76 +101,50 @@ class UserLoginView(generics.GenericAPIView):
     )
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
+        password = request.data.get('password')
 
-        if email:
-            try:
-                user = User.objects.get(email=email)
-                if is_account_locked(user):
-                    return Response({
-                        'message': 'Account is temporarily locked due to multiple failed login attempts. Please try again later or reset your password.'
-                    }, status=status.HTTP_423_LOCKED)
-            except User.DoesNotExist:
-                pass
+        if not email or not password:
+            return Response({
+                'message': 'Email and password are required.'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.validated_data['user']
+        user, status_code, data = AuthenticationService.authenticate_user(email, password, request)
 
-            if not user.is_verified:
-                return Response({
-                    'message': 'Please verify your email address before logging in. Check your email for verification instructions.',
-                    'email_verified': False,
-                    'email': user.email
-                }, status=status.HTTP_403_FORBIDDEN)
-
-            reset_login_attempts(user)
-
-            tokens = get_tokens_for_user(user)
+        if status_code == 'SUCCESS':
             user_data = UserSerializer(user).data
-
             return Response({
                 'message': 'Login successful',
                 'user': user_data,
-                'tokens': tokens
+                'tokens': data
             }, status=status.HTTP_200_OK)
+
+        elif status_code == 'ACCOUNT_LOCKED':
+            return Response({
+                'message': 'Account is temporarily locked due to multiple failed login attempts. Please try again later or reset your password.'
+            }, status=status.HTTP_423_LOCKED)
+
+        elif status_code == 'ACCOUNT_LOCKED_NOW':
+            return Response({
+                'message': 'Account locked due to multiple failed login attempts. Please reset your password or try again later.'
+            }, status=status.HTTP_423_LOCKED)
+
+        elif status_code == 'EMAIL_NOT_VERIFIED':
+            return Response({
+                'message': 'Please verify your email address before logging in. Check your email for verification instructions.',
+                'email_verified': False,
+                'email': data
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        elif status_code == 'INVALID_CREDENTIALS':
+            return Response({
+                'message': f'Invalid credentials. {data} attempts remaining before account lock.',
+                'attempts_remaining': data
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         else:
-            if email:
-                try:
-                    user = User.objects.get(email=email)
-
-                    # Check if user exists and password is correct but not verified
-                    from django.contrib.auth import authenticate
-                    auth_user = authenticate(
-                        request=request,
-                        username=email,
-                        password=request.data.get('password')
-                    )
-
-                    if auth_user and not auth_user.is_verified:
-                        # Don't count as failed attempt if credentials are correct but not verified
-                        return Response({
-                            'message': 'Please verify your email address before logging in. Check your email for verification instructions.',
-                            'email_verified': False,
-                            'email': user.email
-                        }, status=status.HTTP_403_FORBIDDEN)
-
-                    # Only count as failed attempt if credentials are actually wrong
-                    lock_account(user)
-
-                    if user.failed_login_attempts >= 3:
-                        return Response({
-                            'message': 'Account locked due to multiple failed login attempts. Please reset your password or try again later.'
-                        }, status=status.HTTP_423_LOCKED)
-                    else:
-                        remaining_attempts = 3 - user.failed_login_attempts
-                        return Response({
-                            'message': f'Invalid credentials. {remaining_attempts} attempts remaining before account lock.',
-                            'attempts_remaining': remaining_attempts
-                        }, status=status.HTTP_400_BAD_REQUEST)
-                except User.DoesNotExist:
-                    pass
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'message': 'Invalid credentials.'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
@@ -240,25 +197,24 @@ class PasswordResetRequestView(generics.GenericAPIView):
         if serializer.is_valid():
             email = serializer.validated_data['email']
 
-            try:
-                user = User.objects.get(email=email)
-                token = generate_reset_token()
+            user, status_code = PasswordResetService.request_password_reset(email, request)
 
-                if store_reset_token(email, token):
-                    if send_password_reset_email(user, token, request):
-                        return Response({
-                            'message': 'Password reset email sent successfully'
-                        }, status=status.HTTP_200_OK)
-                    else:
-                        return Response({
-                            'message': 'Failed to send email. Please try again.'
-                        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                else:
-                    return Response({
-                        'message': 'Failed to process request. Please try again.'
-                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if status_code == 'SUCCESS':
+                return Response({
+                    'message': 'Password reset email sent successfully'
+                }, status=status.HTTP_200_OK)
 
-            except User.DoesNotExist:
+            elif status_code == 'EMAIL_FAILED':
+                return Response({
+                    'message': 'Failed to send email. Please try again.'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            elif status_code == 'TOKEN_FAILED':
+                return Response({
+                    'message': 'Failed to process request. Please try again.'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            else:
                 return Response({
                     'message': 'Password reset email sent successfully'
                 }, status=status.HTTP_200_OK)
@@ -293,25 +249,19 @@ class PasswordResetConfirmView(generics.GenericAPIView):
             token = serializer.validated_data['token']
             new_password = serializer.validated_data['new_password']
 
-            email = verify_reset_token(token)
-            if not email:
-                return Response({
-                    'message': 'Invalid or expired token'
-                }, status=status.HTTP_400_BAD_REQUEST)
+            user, status_code = PasswordResetService.confirm_password_reset(token, new_password)
 
-            try:
-                user = User.objects.get(email=email)
-                user.set_password(new_password)
-                reset_login_attempts(user)
-                user.save()
-
-                invalidate_reset_token(token)
-
+            if status_code == 'SUCCESS':
                 return Response({
                     'message': 'Password reset successful. Account unlocked.'
                 }, status=status.HTTP_200_OK)
 
-            except User.DoesNotExist:
+            elif status_code == 'INVALID_TOKEN':
+                return Response({
+                    'message': 'Invalid or expired token'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            else:
                 return Response({
                     'message': 'User not found'
                 }, status=status.HTTP_400_BAD_REQUEST)
@@ -344,30 +294,24 @@ class EmailVerificationView(generics.GenericAPIView):
         if serializer.is_valid():
             token = serializer.validated_data['token']
 
-            email = verify_verification_token(token)
-            if not email:
-                return Response({
-                    'message': 'Invalid or expired verification token'
-                }, status=status.HTTP_400_BAD_REQUEST)
+            user, status_code = EmailVerificationService.verify_email(token)
 
-            try:
-                user = User.objects.get(email=email)
-                if user.is_verified:
-                    return Response({
-                        'message': 'Email is already verified'
-                    }, status=status.HTTP_200_OK)
-
-                user.is_verified = True
-                user.save()
-
-                invalidate_verification_token(token)
-                send_welcome_email(user)
-
+            if status_code == 'SUCCESS':
                 return Response({
                     'message': 'Email verified successfully! Welcome email sent.'
                 }, status=status.HTTP_200_OK)
 
-            except User.DoesNotExist:
+            elif status_code == 'ALREADY_VERIFIED':
+                return Response({
+                    'message': 'Email is already verified'
+                }, status=status.HTTP_200_OK)
+
+            elif status_code == 'INVALID_TOKEN':
+                return Response({
+                    'message': 'Invalid or expired verification token'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            else:
                 return Response({
                     'message': 'User not found'
                 }, status=status.HTTP_400_BAD_REQUEST)
@@ -400,23 +344,19 @@ class ResendVerificationView(generics.GenericAPIView):
         if serializer.is_valid():
             email = serializer.validated_data['email']
 
-            try:
-                user = User.objects.get(email=email)
-                if user.is_verified:
-                    return Response({
-                        'message': 'Email is already verified'
-                    }, status=status.HTTP_200_OK)
+            user, status_code = EmailVerificationService.resend_verification(email, request)
 
-                verification_token = generate_verification_token()
-                store_verification_token(user.email, verification_token)
-                send_verification_email(user, verification_token, request)
-
+            if status_code == 'SUCCESS':
                 return Response({
                     'message': 'Verification email sent successfully'
                 }, status=status.HTTP_200_OK)
 
-            except User.DoesNotExist:
-                # Don't reveal if user exists or not for security
+            elif status_code == 'ALREADY_VERIFIED':
+                return Response({
+                    'message': 'Email is already verified'
+                }, status=status.HTTP_200_OK)
+
+            else:
                 return Response({
                     'message': 'If an account with this email exists, a verification email has been sent.'
                 }, status=status.HTTP_200_OK)

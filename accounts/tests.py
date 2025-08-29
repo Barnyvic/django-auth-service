@@ -118,6 +118,8 @@ class UserLoginTest(APITestCase):
             'password': 'testpassword123'
         }
         self.user = User.objects.create_user(**self.user_data)
+        self.user.is_verified = True
+        self.user.save()
 
     def test_user_login_success(self):
         """Test successful user login"""
@@ -214,9 +216,8 @@ class PasswordResetTest(APITestCase):
         self.user = User.objects.create_user(**self.user_data)
         cache.clear()  # Clear cache before each test
 
-    @patch('accounts.utils.send_password_reset_email')
+    @patch('accounts.email_service.send_password_reset_email')
     def test_password_reset_request_success(self, mock_send_email):
-        """Test successful password reset request"""
         mock_send_email.return_value = True
         data = {'email': self.user_data['email']}
         response = self.client.post(self.reset_request_url, data)
@@ -410,5 +411,212 @@ class RateLimitingTest(APITestCase):
                 self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
     def tearDown(self):
-        # Clear rate limiting cache
         cache.clear()
+
+
+class EmailVerificationTest(APITestCase):
+    def setUp(self):
+        self.verify_url = reverse('accounts:verify_email')
+        self.resend_url = reverse('accounts:resend_verification')
+        self.check_url = reverse('accounts:check_verification')
+        self.user_data = {
+            'email': 'test@example.com',
+            'full_name': 'Test User',
+            'password': 'testpassword123'
+        }
+        self.user = User.objects.create_user(**self.user_data)
+        cache.clear()
+
+    def test_email_verification_success(self):
+        from accounts.utils import generate_verification_token, store_verification_token
+        token = generate_verification_token()
+        store_verification_token(self.user.email, token)
+
+        data = {'token': token}
+        response = self.client.post(self.verify_url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('verified successfully', response.data['message'])
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_verified)
+
+    def test_email_verification_invalid_token(self):
+        data = {'token': 'invalid-token'}
+        response = self.client.post(self.verify_url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_email_verification_already_verified(self):
+        from accounts.utils import generate_verification_token, store_verification_token
+        self.user.is_verified = True
+        self.user.save()
+
+        token = generate_verification_token()
+        store_verification_token(self.user.email, token)
+
+        data = {'token': token}
+        response = self.client.post(self.verify_url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('already verified', response.data['message'])
+
+    def test_resend_verification_success(self):
+        data = {'email': self.user.email}
+        response = self.client.post(self.resend_url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('sent successfully', response.data['message'])
+
+    def test_resend_verification_already_verified(self):
+        self.user.is_verified = True
+        self.user.save()
+
+        data = {'email': self.user.email}
+        response = self.client.post(self.resend_url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('already verified', response.data['message'])
+
+    def test_check_verification_status_unverified(self):
+        data = {'email': self.user.email}
+        response = self.client.post(self.check_url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['is_verified'])
+
+    def test_check_verification_status_verified(self):
+        self.user.is_verified = True
+        self.user.save()
+
+        data = {'email': self.user.email}
+        response = self.client.post(self.check_url, data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['is_verified'])
+
+
+class AccountLockoutTest(APITestCase):
+    def setUp(self):
+        self.login_url = reverse('accounts:login')
+        self.user_data = {
+            'email': 'test@example.com',
+            'full_name': 'Test User',
+            'password': 'testpassword123'
+        }
+        self.user = User.objects.create_user(**self.user_data)
+        self.user.is_verified = True
+        self.user.save()
+
+    def test_login_blocked_for_unverified_user(self):
+        self.user.is_verified = False
+        self.user.save()
+
+        login_data = {
+            'email': self.user_data['email'],
+            'password': self.user_data['password']
+        }
+        response = self.client.post(self.login_url, login_data)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn('verify your email', response.data['message'])
+        self.assertFalse(response.data['email_verified'])
+
+    def test_failed_login_attempts_tracking(self):
+        login_data = {
+            'email': self.user_data['email'],
+            'password': 'wrongpassword'
+        }
+
+        response = self.client.post(self.login_url, login_data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('attempts remaining', response.data['message'])
+        self.assertEqual(response.data['attempts_remaining'], 2)
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.failed_login_attempts, 1)
+
+    def test_account_lockout_after_three_attempts(self):
+        login_data = {
+            'email': self.user_data['email'],
+            'password': 'wrongpassword'
+        }
+
+        for i in range(3):
+            response = self.client.post(self.login_url, login_data)
+
+        self.assertEqual(response.status_code, status.HTTP_423_LOCKED)
+        self.assertIn('Account locked', response.data['message'])
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.failed_login_attempts, 3)
+        self.assertIsNotNone(self.user.account_locked_until)
+
+    def test_successful_login_resets_attempts(self):
+        self.user.failed_login_attempts = 2
+        self.user.save()
+
+        login_data = {
+            'email': self.user_data['email'],
+            'password': self.user_data['password']
+        }
+        response = self.client.post(self.login_url, login_data)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.failed_login_attempts, 0)
+
+    def test_unverified_correct_credentials_no_failed_attempt(self):
+        self.user.is_verified = False
+        self.user.save()
+
+        login_data = {
+            'email': self.user_data['email'],
+            'password': self.user_data['password']
+        }
+        response = self.client.post(self.login_url, login_data)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.failed_login_attempts, 0)
+
+
+class VerificationUtilityTest(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def test_generate_verification_token(self):
+        from accounts.utils import generate_verification_token
+        token = generate_verification_token()
+        self.assertIsInstance(token, str)
+        self.assertEqual(len(token), 32)
+
+        token2 = generate_verification_token()
+        self.assertNotEqual(token, token2)
+
+    def test_store_and_verify_verification_token(self):
+        from accounts.utils import generate_verification_token, store_verification_token, verify_verification_token
+        email = 'test@example.com'
+        token = generate_verification_token()
+
+        result = store_verification_token(email, token)
+        self.assertTrue(result)
+
+        retrieved_email = verify_verification_token(token)
+        self.assertEqual(retrieved_email, email)
+
+    def test_account_locking_utilities(self):
+        from accounts.utils import is_account_locked, lock_account, reset_login_attempts
+        user_data = {
+            'email': 'test@example.com',
+            'full_name': 'Test User',
+            'password': 'testpassword123'
+        }
+        user = User.objects.create_user(**user_data)
+
+        self.assertFalse(is_account_locked(user))
+
+        lock_account(user)
+        self.assertEqual(user.failed_login_attempts, 1)
+
+        for i in range(2):
+            lock_account(user)
+
+        self.assertEqual(user.failed_login_attempts, 3)
+        self.assertTrue(is_account_locked(user))
+
+        reset_login_attempts(user)
+        self.assertEqual(user.failed_login_attempts, 0)
+        self.assertFalse(is_account_locked(user))
