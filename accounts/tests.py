@@ -54,7 +54,6 @@ class UserModelTest(TestCase):
 
 
 class UserRegistrationTest(APITestCase):
-    """Test cases for user registration"""
 
     def setUp(self):
         self.register_url = reverse('accounts:register')
@@ -66,7 +65,6 @@ class UserRegistrationTest(APITestCase):
         }
 
     def test_user_registration_success(self):
-        """Test successful user registration"""
         response = self.client.post(self.register_url, self.valid_data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertIn('message', response.data)
@@ -75,7 +73,6 @@ class UserRegistrationTest(APITestCase):
         self.assertTrue(User.objects.filter(email=self.valid_data['email']).exists())
 
     def test_user_registration_duplicate_email(self):
-        """Test registration with duplicate email"""
         User.objects.create_user(
             email=self.valid_data['email'],
             full_name='Existing User',
@@ -85,14 +82,12 @@ class UserRegistrationTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_user_registration_password_mismatch(self):
-        """Test registration with password mismatch"""
         data = self.valid_data.copy()
         data['password_confirm'] = 'differentpassword'
         response = self.client.post(self.register_url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_user_registration_weak_password(self):
-        """Test registration with weak password"""
         data = self.valid_data.copy()
         data['password'] = '123'
         data['password_confirm'] = '123'
@@ -100,7 +95,6 @@ class UserRegistrationTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_user_registration_invalid_email(self):
-        """Test registration with invalid email"""
         data = self.valid_data.copy()
         data['email'] = 'invalid-email'
         response = self.client.post(self.register_url, data)
@@ -108,7 +102,6 @@ class UserRegistrationTest(APITestCase):
 
 
 class UserLoginTest(APITestCase):
-    """Test cases for user login"""
 
     def setUp(self):
         self.login_url = reverse('accounts:login')
@@ -122,7 +115,6 @@ class UserLoginTest(APITestCase):
         self.user.save()
 
     def test_user_login_success(self):
-        """Test successful user login"""
         login_data = {
             'email': self.user_data['email'],
             'password': self.user_data['password']
@@ -136,7 +128,6 @@ class UserLoginTest(APITestCase):
         self.assertIn('refresh', response.data['tokens'])
 
     def test_user_login_invalid_credentials(self):
-        """Test login with invalid credentials"""
         login_data = {
             'email': self.user_data['email'],
             'password': 'wrongpassword'
@@ -145,7 +136,6 @@ class UserLoginTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_user_login_nonexistent_user(self):
-        """Test login with nonexistent user"""
         login_data = {
             'email': 'nonexistent@example.com',
             'password': 'password123'
@@ -154,7 +144,6 @@ class UserLoginTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_user_login_inactive_user(self):
-        """Test login with inactive user"""
         self.user.is_active = False
         self.user.save()
         login_data = {
@@ -166,7 +155,6 @@ class UserLoginTest(APITestCase):
 
 
 class UserProfileTest(APITestCase):
-    """Test cases for user profile"""
 
     def setUp(self):
         self.profile_url = reverse('accounts:profile')
@@ -180,7 +168,6 @@ class UserProfileTest(APITestCase):
         self.access_token = str(self.refresh.access_token)
 
     def test_get_user_profile_authenticated(self):
-        """Test getting user profile when authenticated"""
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
         response = self.client.get(self.profile_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -188,7 +175,6 @@ class UserProfileTest(APITestCase):
         self.assertEqual(response.data['full_name'], self.user_data['full_name'])
 
     def test_get_user_profile_unauthenticated(self):
-        """Test getting user profile when unauthenticated"""
         response = self.client.get(self.profile_url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -196,7 +182,6 @@ class UserProfileTest(APITestCase):
 
 
 class PasswordResetTest(APITestCase):
-    """Test cases for password reset functionality"""
 
     def setUp(self):
         self.reset_request_url = reverse('accounts:password_reset_request')
@@ -207,7 +192,7 @@ class PasswordResetTest(APITestCase):
             'password': 'testpassword123'
         }
         self.user = User.objects.create_user(**self.user_data)
-        cache.clear()  # Clear cache before each test
+        cache.clear()
 
     @patch('accounts.email_service.send_password_reset_email')
     def test_password_reset_request_success(self, mock_send_email):
@@ -224,7 +209,6 @@ class PasswordResetTest(APITestCase):
         mock_send_email.assert_called_once()
 
     def test_password_reset_request_nonexistent_email(self):
-        """Test password reset request with nonexistent email"""
         from django.conf import settings
 
         if 'dummy' in settings.CACHES['default']['BACKEND'].lower():
@@ -232,17 +216,14 @@ class PasswordResetTest(APITestCase):
 
         data = {'email': 'nonexistent@example.com'}
         response = self.client.post(self.reset_request_url, data)
-        # Should return success for security reasons
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_password_reset_request_invalid_email(self):
-        """Test password reset request with invalid email format"""
         data = {'email': 'invalid-email'}
         response = self.client.post(self.reset_request_url, data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_password_reset_confirm_success(self):
-        """Test successful password reset confirmation"""
         from django.conf import settings
 
         if 'dummy' in settings.CACHES['default']['BACKEND'].lower():
@@ -263,7 +244,6 @@ class PasswordResetTest(APITestCase):
         self.assertTrue(self.user.check_password('newpassword123'))
 
     def test_password_reset_confirm_invalid_token(self):
-        """Test password reset confirmation with invalid token"""
         data = {
             'token': 'invalid-token',
             'new_password': 'newpassword123',
@@ -273,7 +253,6 @@ class PasswordResetTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_password_reset_confirm_password_mismatch(self):
-        """Test password reset confirmation with password mismatch"""
         token = generate_reset_token()
         store_reset_token(self.user_data['email'], token)
 
@@ -286,7 +265,6 @@ class PasswordResetTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_password_reset_confirm_weak_password(self):
-        """Test password reset confirmation with weak password"""
         token = generate_reset_token()
         store_reset_token(self.user_data['email'], token)
 
@@ -300,13 +278,11 @@ class PasswordResetTest(APITestCase):
 
 
 class UtilityFunctionsTest(TestCase):
-    """Test cases for utility functions"""
 
     def setUp(self):
         cache.clear()
 
     def test_generate_reset_token(self):
-        """Test reset token generation"""
         token = generate_reset_token()
         self.assertIsInstance(token, str)
         self.assertEqual(len(token), 32)
@@ -315,7 +291,6 @@ class UtilityFunctionsTest(TestCase):
         self.assertNotEqual(token, token2)
 
     def test_store_and_verify_reset_token(self):
-        """Test storing and verifying reset token"""
         from django.conf import settings
 
         if 'dummy' in settings.CACHES['default']['BACKEND'].lower():
@@ -331,12 +306,10 @@ class UtilityFunctionsTest(TestCase):
         self.assertEqual(retrieved_email, email)
 
     def test_verify_invalid_reset_token(self):
-        """Test verifying invalid reset token"""
         result = verify_reset_token('invalid-token')
         self.assertIsNone(result)
 
     def test_invalidate_reset_token(self):
-        """Test invalidating reset token"""
         from django.conf import settings
 
         if 'dummy' in settings.CACHES['default']['BACKEND'].lower():
@@ -355,7 +328,6 @@ class UtilityFunctionsTest(TestCase):
 
 
 class JWTTokenTest(APITestCase):
-    """Test cases for JWT token functionality"""
 
     def setUp(self):
         self.user_data = {
@@ -368,7 +340,6 @@ class JWTTokenTest(APITestCase):
 
 
     def test_token_refresh(self):
-        """Test JWT token refresh"""
         refresh = RefreshToken.for_user(self.user)
         data = {'refresh': str(refresh)}
         response = self.client.post(self.token_refresh_url, data)
@@ -376,7 +347,6 @@ class JWTTokenTest(APITestCase):
         self.assertIn('access', response.data)
 
     def test_token_refresh_invalid(self):
-        """Test JWT token refresh with invalid token"""
         data = {'refresh': 'invalid-token'}
         response = self.client.post(self.token_refresh_url, data)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -385,7 +355,6 @@ class JWTTokenTest(APITestCase):
 
 
 class RateLimitingTest(APITestCase):
-    """Test cases for rate limiting"""
 
     def setUp(self):
         self.login_url = reverse('accounts:login')
@@ -393,7 +362,6 @@ class RateLimitingTest(APITestCase):
         self.reset_request_url = reverse('accounts:password_reset_request')
 
     def test_login_rate_limiting(self):
-        """Test rate limiting on login endpoint"""
         from django.conf import settings
 
         if (getattr(settings, 'RATELIMIT_ENABLE', True) is False or
@@ -630,7 +598,6 @@ class HealthCheckTest(TestCase):
         self.health_url = '/health/'
 
     def test_health_check_endpoint(self):
-        """Test health check endpoint returns proper response"""
         response = self.client.get(self.health_url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -641,9 +608,7 @@ class HealthCheckTest(TestCase):
         self.assertIn('version', data)
         self.assertIn('services', data)
 
-        # Check that services are included
         self.assertIn('database', data['services'])
         self.assertIn('redis', data['services'])
 
-        # Version should be v1
         self.assertEqual(data['version'], 'v1')

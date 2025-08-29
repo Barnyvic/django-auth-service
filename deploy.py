@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 """
 Production deployment script for Django Auth Service
 Handles database migrations, static files, and other deployment tasks
@@ -25,17 +25,17 @@ def run_command(command, description):
             capture_output=True, 
             text=True
         )
-        logger.info(f"✅ {description} completed successfully")
+        logger.info(f"{description} completed successfully")
         if result.stdout:
             logger.info(f"Output: {result.stdout}")
         return True
     except subprocess.CalledProcessError as e:
-        logger.error(f"❌ {description} failed")
+        logger.error(f"{description} failed")
         logger.error(f"Error: {e.stderr}")
         return False
 
 def check_environment():
-    logger.info("🔍 Checking environment variables...")
+    logger.info("Checking environment variables...")
     
     required_vars = [
         'SECRET_KEY',
@@ -58,7 +58,7 @@ def check_environment():
     return True
 
 def run_migrations():
-    logger.info("🗄️ Running database migrations...")
+    logger.info("Running database migrations...")
     
     commands = [
         ("python manage.py makemigrations", "Generate migrations"),
@@ -79,7 +79,7 @@ def collect_static_files():
     )
 
 def create_superuser():
-    logger.info("👤 Creating superuser...")
+    logger.info("Creating superuser...")
     
     admin_email = os.getenv('ADMIN_EMAIL', 'admin@example.com')
     admin_password = os.getenv('ADMIN_PASSWORD', 'admin123')
@@ -108,29 +108,28 @@ else:
         f.write(create_superuser_script)
     
     result = run_command("python create_superuser.py", "Create superuser")
-    
-    # Clean up temporary file
+
     if os.path.exists('create_superuser.py'):
         os.remove('create_superuser.py')
     
     return result
 
 def check_database_connection():
-    logger.info("🔗 Testing database connection...")
+    logger.info("Testing database connection...")
     return run_command(
         "python manage.py check --database default", 
         "Check database connection"
     )
 
 def run_tests():
-    logger.info("🧪 Running tests...")
+    logger.info("Running tests...")
     return run_command(
         "python manage.py test --verbosity=1", 
         "Run tests"
     )
 
 def main():
-    logger.info("🚀 Starting production deployment...")
+    logger.info("Starting production deployment...")
     
     project_dir = Path(__file__).parent
     os.chdir(project_dir)
