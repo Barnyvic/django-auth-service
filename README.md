@@ -92,16 +92,25 @@ python manage.py runserver
 docker-compose up --build
 ```
 
-2. **Run migrations in container**
+The entrypoint script will automatically:
+
+- Wait for the database to be ready
+- Run database migrations
+- Collect static files
+- Create a superuser (if ADMIN_EMAIL and ADMIN_PASSWORD are set)
+- Start the development server
+
+2. **Manual operations (if needed)**
 
 ```bash
+# Run migrations manually
 docker-compose exec web python manage.py migrate
-```
 
-3. **Create superuser in container**
-
-```bash
+# Create superuser manually
 docker-compose exec web python manage.py createsuperuser
+
+# Access container shell
+docker-compose exec web bash
 ```
 
 ## Environment Variables
@@ -228,6 +237,52 @@ coverage report
 coverage html
 ```
 
+## Deployment
+
+### Production Deployment
+
+The application includes several deployment scripts:
+
+1. **Using the deployment script:**
+
+```bash
+python deploy.py
+```
+
+2. **Using the startup script:**
+
+```bash
+./start.sh
+```
+
+3. **Using the build script (for platforms like Render):**
+
+```bash
+./build.sh
+```
+
+### Platform-Specific Instructions
+
+#### Render
+
+1. Connect your GitHub repository
+2. Set build command: `./build.sh`
+3. Set start command: `./start.sh`
+4. Add environment variables (see below)
+
+#### Railway
+
+1. Connect your GitHub repository
+2. Set build command: `python deploy.py`
+3. Add environment variables (see below)
+
+#### Docker Production
+
+```bash
+docker build -t auth-service .
+docker run -p 8000:8000 --env-file .env auth-service
+```
+
 #### Environment Variables for Production
 
 ```env
@@ -253,6 +308,46 @@ RUN_TESTS=false
 - **Password Validation**: Django's built-in password validators
 - **CORS Configuration**: Controlled cross-origin requests
 - **HTTPS Enforcement**: In production settings
+
+## Troubleshooting
+
+### Common Issues
+
+#### Database Migration Errors
+
+If you see `relation "auth_user" does not exist`:
+
+1. **For local development:**
+
+```bash
+python manage.py migrate
+```
+
+2. **For Docker:**
+
+```bash
+docker-compose exec web python manage.py migrate
+```
+
+3. **For production deployment:**
+   Ensure your deployment platform runs the build script or migrations:
+
+- Render: Set build command to `./build.sh`
+- Railway: Use `python deploy.py`
+- Manual: Run `python manage.py migrate`
+
+#### Redis Connection Issues
+
+If you see Redis connection errors in local development:
+
+- The app automatically falls back to local memory cache when Redis is unavailable
+- For production, ensure REDIS_URL environment variable is set correctly
+
+#### Environment Variables Not Loading
+
+- Ensure `.env` file exists in the project root
+- Check that environment variables are set in your deployment platform
+- Verify variable names match exactly (case-sensitive)
 
 ## Contributing
 

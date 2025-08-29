@@ -23,7 +23,8 @@ COPY . /app/
 
 RUN mkdir -p /app/staticfiles
 
-RUN python manage.py collectstatic --noinput
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 RUN adduser --disabled-password --gecos '' appuser
 RUN chown -R appuser:appuser /app
@@ -31,4 +32,5 @@ USER appuser
 
 EXPOSE 8000
 
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["gunicorn", "--bind", "0.0.0.0:8000", "auth_service.wsgi:application"]
