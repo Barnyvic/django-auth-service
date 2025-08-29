@@ -610,3 +610,27 @@ class VerificationUtilityTest(TestCase):
         reset_login_attempts(user)
         self.assertEqual(user.failed_login_attempts, 0)
         self.assertFalse(is_account_locked(user))
+
+
+class HealthCheckTest(TestCase):
+    def setUp(self):
+        self.health_url = '/health/'
+
+    def test_health_check_endpoint(self):
+        """Test health check endpoint returns proper response"""
+        response = self.client.get(self.health_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        data = response.json()
+        self.assertIn('status', data)
+        self.assertIn('timestamp', data)
+        self.assertIn('version', data)
+        self.assertIn('services', data)
+
+        # Check that services are included
+        self.assertIn('database', data['services'])
+        self.assertIn('redis', data['services'])
+
+        # Version should be v1
+        self.assertEqual(data['version'], 'v1')

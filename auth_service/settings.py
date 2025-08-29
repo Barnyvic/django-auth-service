@@ -67,6 +67,14 @@ DATABASES = {
     )
 }
 
+# Use SQLite for testing to avoid external database dependencies
+import sys
+if 'test' in sys.argv or 'pytest' in sys.modules:
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': ':memory:',
+    }
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -134,6 +142,15 @@ CACHES = {
         }
     }
 }
+
+# Use dummy cache for testing to avoid external Redis dependencies
+# and disable rate limiting during tests
+if 'test' in sys.argv or 'pytest' in sys.modules:
+    CACHES['default'] = {
+        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+    }
+    # Disable rate limiting during tests
+    RATELIMIT_ENABLE = False
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
