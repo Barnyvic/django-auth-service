@@ -1,9 +1,16 @@
+from typing import Any, Optional
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 
 
-class UserManager(BaseUserManager):
-    def create_user(self, email, full_name, password=None, **extra_fields):
+class UserManager(BaseUserManager['User']):
+    def create_user(
+        self,
+        email: str,
+        full_name: str,
+        password: Optional[str] = None,
+        **extra_fields: Any
+    ) -> 'User':
         if not email:
             raise ValueError('The Email field must be set')
         email = self.normalize_email(email)
@@ -13,7 +20,13 @@ class UserManager(BaseUserManager):
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email, full_name, password=None, **extra_fields):
+    def create_superuser(
+        self,
+        email: str,
+        full_name: str,
+        password: Optional[str] = None,
+        **extra_fields: Any
+    ) -> 'User':
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
 
@@ -45,13 +58,11 @@ class User(AbstractUser):
         verbose_name = 'User'
         verbose_name_plural = 'Users'
 
-    def __str__(self):
-        return self.email
+    def __str__(self) -> str:
+        return str(self.email)
 
-    @property
-    def get_full_name(self):
-        return self.full_name
+    def get_full_name(self) -> str:
+        return str(self.full_name)
 
-    @property
-    def get_short_name(self):
-        return self.full_name.split(' ')[0] if self.full_name else self.email
+    def get_short_name(self) -> str:
+        return str(self.full_name).split(' ')[0] if self.full_name else str(self.email)

@@ -1,18 +1,28 @@
+from typing import Optional, TYPE_CHECKING
 import sib_api_v3_sdk
 from sib_api_v3_sdk.rest import ApiException
 from django.conf import settings
 from decouple import config
 
+if TYPE_CHECKING:
+    from django.http import HttpRequest
+    from .models import User
+
 
 class BrevoEmailService:
-    def __init__(self):
+    def __init__(self) -> None:
         configuration = sib_api_v3_sdk.Configuration()
         configuration.api_key['api-key'] = config('BREVO_API_KEY')
         self.api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
-        self.from_email = config('FROM_EMAIL', default='noreply@authservice.com')
-        self.from_name = config('FROM_NAME', default='Auth Service')
+        self.from_email: str = config('FROM_EMAIL', default='noreply@authservice.com')
+        self.from_name: str = config('FROM_NAME', default='Auth Service')
 
-    def send_verification_email(self, user, token, request=None):
+    def send_verification_email(
+        self,
+        user: 'User',
+        token: str,
+        request: Optional['HttpRequest'] = None
+    ) -> bool:
         try:
             if request:
                 domain = request.get_host()

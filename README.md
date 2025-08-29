@@ -14,6 +14,7 @@ A comprehensive user authentication service built with Django, featuring JWT aut
 - **Docker** support for local development
 - **Deployment** configurations for Railway and Render
 - **Comprehensive Unit Tests**
+- **Type Safety** with comprehensive type hints and mypy support
 
 ## Tech Stack
 
@@ -24,6 +25,7 @@ A comprehensive user authentication service built with Django, featuring JWT aut
 - **Documentation**: drf-yasg (Swagger/OpenAPI)
 - **Deployment**: Docker, Railway, Render
 - **Rate Limiting**: django-ratelimit
+- **Type Checking**: mypy with django-stubs
 
 ## Prerequisites
 

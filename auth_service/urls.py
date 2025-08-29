@@ -1,3 +1,4 @@
+from typing import List, Any
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework import permissions
@@ -18,7 +19,7 @@ schema_view = get_schema_view(
     permission_classes=(permissions.AllowAny,),
 )
 
-urlpatterns = [
+urlpatterns: List[Any] = [
     path('admin/', admin.site.urls),
 
     path('health/', HealthCheckView.as_view(), name='health_check'),

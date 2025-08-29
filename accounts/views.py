@@ -1,6 +1,8 @@
+from typing import Any, Dict, TYPE_CHECKING
 from rest_framework import status, generics, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.request import Request
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from django.contrib.auth import get_user_model
@@ -29,6 +31,9 @@ from .services import (
     UserService
 )
 
+if TYPE_CHECKING:
+    from .models import User as UserType
+
 User = get_user_model()
 
 
@@ -56,7 +61,7 @@ class UserRegistrationView(generics.CreateAPIView):
             400: "Bad Request"
         }
     )
-    def post(self, request, *args, **kwargs):
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             user, tokens = AuthenticationService.register_user(
@@ -102,7 +107,7 @@ class UserLoginView(generics.GenericAPIView):
             423: "Account locked"
         }
     )
-    def post(self, request, *args, **kwargs):
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         email = request.data.get('email')
         password = request.data.get('password')
 
@@ -154,7 +159,7 @@ class UserProfileView(generics.RetrieveAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_object(self):
+    def get_object(self) -> 'UserType':
         return self.request.user
 
     @swagger_auto_schema(
@@ -162,7 +167,7 @@ class UserProfileView(generics.RetrieveAPIView):
         security=[{'Bearer': []}],
         responses={200: UserSerializer}
     )
-    def get(self, request, *args, **kwargs):
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         return super().get(request, *args, **kwargs)
 
 

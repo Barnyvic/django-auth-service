@@ -45,12 +45,12 @@ class UserModelTest(TestCase):
 
     def test_get_full_name(self):
         user = User.objects.create_user(**self.user_data)
-        self.assertEqual(user.get_full_name, self.user_data['full_name'])
+        self.assertEqual(user.get_full_name(), self.user_data['full_name'])
 
     def test_get_short_name(self):
         user = User.objects.create_user(**self.user_data)
         expected_short_name = self.user_data['full_name'].split(' ')[0]
-        self.assertEqual(user.get_short_name, expected_short_name)
+        self.assertEqual(user.get_short_name(), expected_short_name)
 
 
 class UserRegistrationTest(APITestCase):
