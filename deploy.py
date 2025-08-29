@@ -58,7 +58,6 @@ def check_environment():
     return True
 
 def run_migrations():
-    """Run database migrations"""
     logger.info("🗄️ Running database migrations...")
     
     commands = [
@@ -73,15 +72,13 @@ def run_migrations():
     return True
 
 def collect_static_files():
-    """Collect static files for production"""
-    logger.info("📁 Collecting static files...")
+    logger.info("Collecting static files...")
     return run_command(
         "python manage.py collectstatic --noinput", 
         "Collect static files"
     )
 
 def create_superuser():
-    """Create superuser if it doesn't exist"""
     logger.info("👤 Creating superuser...")
     
     admin_email = os.getenv('ADMIN_EMAIL', 'admin@example.com')
@@ -119,7 +116,6 @@ else:
     return result
 
 def check_database_connection():
-    """Test database connection"""
     logger.info("🔗 Testing database connection...")
     return run_command(
         "python manage.py check --database default", 
@@ -127,7 +123,6 @@ def check_database_connection():
     )
 
 def run_tests():
-    """Run tests to ensure everything works"""
     logger.info("🧪 Running tests...")
     return run_command(
         "python manage.py test --verbosity=1", 
@@ -135,10 +130,8 @@ def run_tests():
     )
 
 def main():
-    """Main deployment function"""
     logger.info("🚀 Starting production deployment...")
     
-    # Change to project directory
     project_dir = Path(__file__).parent
     os.chdir(project_dir)
     
@@ -150,7 +143,6 @@ def main():
         ("Superuser Creation", create_superuser),
     ]
     
-    # Add tests only if not in production
     if os.getenv('RUN_TESTS', 'false').lower() == 'true':
         deployment_steps.append(("Tests", run_tests))
     
@@ -158,31 +150,30 @@ def main():
     
     for step_name, step_function in deployment_steps:
         logger.info(f"\n{'='*50}")
-        logger.info(f"📋 Step: {step_name}")
+        logger.info(f" Step: {step_name}")
         logger.info(f"{'='*50}")
         
         if not step_function():
             failed_steps.append(step_name)
-            logger.error(f"❌ Step '{step_name}' failed")
+            logger.error(f" Step '{step_name}' failed")
             
-            # Continue with other steps unless it's a critical failure
             if step_name in ["Environment Check", "Database Connection"]:
-                logger.error("💥 Critical step failed. Stopping deployment.")
+                logger.error(" Critical step failed. Stopping deployment.")
                 sys.exit(1)
         else:
-            logger.info(f"✅ Step '{step_name}' completed successfully")
+            logger.info(f" Step '{step_name}' completed successfully")
     
     logger.info(f"\n{'='*50}")
-    logger.info("🎯 DEPLOYMENT SUMMARY")
+    logger.info(" DEPLOYMENT SUMMARY")
     logger.info(f"{'='*50}")
     
     if failed_steps:
-        logger.warning(f"⚠️ Some steps failed: {', '.join(failed_steps)}")
+        logger.warning(f" Some steps failed: {', '.join(failed_steps)}")
         logger.warning("Please review the logs and fix any issues.")
         sys.exit(1)
     else:
-        logger.info("🎉 All deployment steps completed successfully!")
-        logger.info("🚀 Your Django Auth Service is ready for production!")
+        logger.info(" All deployment steps completed successfully!")
+        logger.info("Your Django Auth Service is ready for production!")
 
 if __name__ == "__main__":
     main()
