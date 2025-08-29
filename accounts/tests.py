@@ -240,7 +240,6 @@ class PasswordResetTest(APITestCase):
 
     def test_password_reset_confirm_success(self):
         """Test successful password reset confirmation"""
-        # Generate and store token
         token = generate_reset_token()
         store_reset_token(self.user_data['email'], token)
 
@@ -252,7 +251,6 @@ class PasswordResetTest(APITestCase):
         response = self.client.post(self.reset_confirm_url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        # Verify password was changed
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password('newpassword123'))
 
@@ -305,7 +303,6 @@ class UtilityFunctionsTest(TestCase):
         self.assertIsInstance(token, str)
         self.assertEqual(len(token), 32)
 
-        # Test uniqueness
         token2 = generate_reset_token()
         self.assertNotEqual(token, token2)
 
@@ -314,11 +311,9 @@ class UtilityFunctionsTest(TestCase):
         email = 'test@example.com'
         token = generate_reset_token()
 
-        # Store token
         result = store_reset_token(email, token)
         self.assertTrue(result)
 
-        # Verify token
         retrieved_email = verify_reset_token(token)
         self.assertEqual(retrieved_email, email)
 
@@ -332,15 +327,12 @@ class UtilityFunctionsTest(TestCase):
         email = 'test@example.com'
         token = generate_reset_token()
 
-        # Store and verify token exists
         store_reset_token(email, token)
         self.assertEqual(verify_reset_token(token), email)
 
-        # Invalidate token
         result = invalidate_reset_token(token)
         self.assertTrue(result)
 
-        # Verify token is invalidated
         self.assertIsNone(verify_reset_token(token))
 
 
@@ -401,13 +393,11 @@ class RateLimitingTest(APITestCase):
             'password': 'wrongpassword'
         }
 
-        # Make multiple requests to trigger rate limiting
-        for i in range(12):  # Exceeds 10/m limit
+        for i in range(12):
             response = self.client.post(self.login_url, login_data)
             if i < 10:
                 self.assertIn(response.status_code, [status.HTTP_400_BAD_REQUEST])
             else:
-                # Should be rate limited after 10 requests
                 self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
     def tearDown(self):

@@ -45,7 +45,7 @@ cd auth_service
 2. **Create virtual environment**
 ```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate
 ```
 
 3. **Install dependencies**
@@ -56,15 +56,14 @@ pip install -r requirements.txt
 4. **Environment Configuration**
 ```bash
 cp .env.example .env
-# Edit .env file with your configuration
+
 ```
 
 5. **Database Setup**
 ```bash
-# Create PostgreSQL database
+
 createdb auth_service_db
 
-# Run migrations
 python manage.py migrate
 ```
 
@@ -192,10 +191,8 @@ curl -X POST http://localhost:8000/api/auth/password-reset/ \
 Run the test suite:
 
 ```bash
-# Run all tests
 python manage.py test
 
-# Run tests with coverage
 coverage run --source='.' manage.py test
 coverage report
 coverage html
