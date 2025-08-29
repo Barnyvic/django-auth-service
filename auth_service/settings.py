@@ -161,7 +161,8 @@ SWAGGER_SETTINGS = {
         'Bearer': {
             'type': 'apiKey',
             'name': 'Authorization',
-            'in': 'header'
+            'in': 'header',
+            'description': 'Enter: Bearer <your-token>'
         }
     },
     'USE_SESSION_AUTH': False,
@@ -173,6 +174,8 @@ SWAGGER_SETTINGS = {
         'delete',
         'patch'
     ],
+    'DEFAULT_MODEL_RENDERING': 'example',
+    'DEFAULT_AUTO_SCHEMA_CLASS': 'drf_yasg.inspectors.SwaggerAutoSchema',
 }
 
 if not DEBUG:

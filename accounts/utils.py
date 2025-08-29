@@ -30,44 +30,7 @@ def invalidate_reset_token(token):
     return True
 
 
-def send_password_reset_email(user, token, request=None):
-    subject = 'Password Reset Request - Auth Service'
 
-    if request:
-        domain = request.get_host()
-        protocol = 'https' if request.is_secure() else 'http'
-        reset_url = f"{protocol}://{domain}/reset-password?token={token}"
-    else:
-        reset_url = f"http://localhost:8000/reset-password?token={token}"
-
-    message = f"""
-    Hello {user.full_name},
-
-    You have requested to reset your password for your Auth Service account.
-
-    Please click the link below to reset your password:
-    {reset_url}
-
-    This link will expire in 10 minutes.
-
-    If you did not request this password reset, please ignore this email.
-
-    Best regards,
-    Auth Service Team
-    """
-
-    try:
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=settings.EMAIL_HOST_USER or 'noreply@authservice.com',
-            recipient_list=[user.email],
-            fail_silently=False,
-        )
-        return True
-    except Exception as e:
-        print(f"Failed to send email: {e}")
-        return False
 
 
 def get_client_ip(request):

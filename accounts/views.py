@@ -2,6 +2,7 @@ from rest_framework import status, generics, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenVerifyView as BaseTokenVerifyView
 from django.contrib.auth import get_user_model
 from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import method_decorator
@@ -21,9 +22,9 @@ from .utils import (
     store_reset_token,
     verify_reset_token,
     invalidate_reset_token,
-    send_password_reset_email,
     get_client_ip
 )
+from .email_service import send_welcome_email, send_password_reset_email
 
 User = get_user_model()
 
@@ -44,6 +45,7 @@ class UserRegistrationView(generics.CreateAPIView):
 
     @swagger_auto_schema(
         operation_description="Register a new user",
+        security=[],
         responses={
             201: openapi.Response(
                 description="User created successfully",
@@ -66,8 +68,10 @@ class UserRegistrationView(generics.CreateAPIView):
             tokens = get_tokens_for_user(user)
             user_data = UserSerializer(user).data
 
+            send_welcome_email(user)
+
             return Response({
-                'message': 'User registered successfully',
+                'message': 'User registered successfully. Welcome email sent!',
                 'user': user_data,
                 'tokens': tokens
             }, status=status.HTTP_201_CREATED)
@@ -83,6 +87,7 @@ class UserLoginView(generics.GenericAPIView):
 
     @swagger_auto_schema(
         operation_description="Login user and get JWT tokens",
+        security=[],
         responses={
             200: openapi.Response(
                 description="Login successful",
@@ -124,6 +129,7 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
     @swagger_auto_schema(
         operation_description="Get user profile",
+        security=[{'Bearer': []}],
         responses={200: UserSerializer}
     )
     def get(self, request, *args, **kwargs):
@@ -131,6 +137,7 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
     @swagger_auto_schema(
         operation_description="Update user profile",
+        security=[{'Bearer': []}],
         responses={200: UserSerializer}
     )
     def patch(self, request, *args, **kwargs):
@@ -144,6 +151,7 @@ class PasswordResetRequestView(generics.GenericAPIView):
 
     @swagger_auto_schema(
         operation_description="Request password reset",
+        security=[],
         responses={
             200: openapi.Response(
                 description="Password reset email sent",
@@ -195,6 +203,7 @@ class PasswordResetConfirmView(generics.GenericAPIView):
 
     @swagger_auto_schema(
         operation_description="Confirm password reset with token",
+        security=[],
         responses={
             200: openapi.Response(
                 description="Password reset successful",
@@ -237,3 +246,31 @@ class PasswordResetConfirmView(generics.GenericAPIView):
                 }, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class TokenVerifyView(BaseTokenVerifyView):
+    @swagger_auto_schema(
+        operation_description="Verify JWT token validity",
+        security=[],
+        responses={
+            200: openapi.Response(
+                description="Token is valid",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'message': openapi.Schema(type=openapi.TYPE_STRING),
+                        'valid': openapi.Schema(type=openapi.TYPE_BOOLEAN)
+                    }
+                )
+            ),
+            401: "Token is invalid or expired"
+        }
+    )
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            return Response({
+                'message': 'Token is valid',
+                'valid': True
+            }, status=status.HTTP_200_OK)
+        return response

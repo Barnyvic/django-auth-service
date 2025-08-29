@@ -1,14 +1,12 @@
 from django.urls import path
-from rest_framework_simplejwt.views import (
-    TokenRefreshView,
-    TokenVerifyView,
-)
+from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     UserRegistrationView,
     UserLoginView,
     UserProfileView,
     PasswordResetRequestView,
     PasswordResetConfirmView,
+    TokenVerifyView,
 )
 
 app_name = 'accounts'
