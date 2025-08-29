@@ -30,6 +30,8 @@ class User(AbstractUser):
     email = models.EmailField(unique=True, max_length=255)
     full_name = models.CharField(max_length=255)
     is_verified = models.BooleanField(default=False)
+    failed_login_attempts = models.IntegerField(default=0)
+    account_locked_until = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

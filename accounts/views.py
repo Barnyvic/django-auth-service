@@ -15,16 +15,25 @@ from .serializers import (
     UserLoginSerializer,
     UserSerializer,
     PasswordResetRequestSerializer,
-    PasswordResetConfirmSerializer
+    PasswordResetConfirmSerializer,
+    EmailVerificationSerializer,
+    ResendVerificationSerializer
 )
 from .utils import (
     generate_reset_token,
     store_reset_token,
     verify_reset_token,
     invalidate_reset_token,
+    generate_verification_token,
+    store_verification_token,
+    verify_verification_token,
+    invalidate_verification_token,
+    is_account_locked,
+    lock_account,
+    reset_login_attempts,
     get_client_ip
 )
-from .email_service import send_welcome_email, send_password_reset_email
+from .email_service import send_verification_email, send_welcome_email, send_password_reset_email
 
 User = get_user_model()
 
@@ -68,10 +77,12 @@ class UserRegistrationView(generics.CreateAPIView):
             tokens = get_tokens_for_user(user)
             user_data = UserSerializer(user).data
 
-            send_welcome_email(user)
+            verification_token = generate_verification_token()
+            store_verification_token(user.email, verification_token)
+            send_verification_email(user, verification_token, request)
 
             return Response({
-                'message': 'User registered successfully. Welcome email sent!',
+                'message': 'User registered successfully. Please check your email to verify your account.',
                 'user': user_data,
                 'tokens': tokens
             }, status=status.HTTP_201_CREATED)
@@ -105,9 +116,24 @@ class UserLoginView(generics.GenericAPIView):
         }
     )
     def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+
+        if email:
+            try:
+                user = User.objects.get(email=email)
+                if is_account_locked(user):
+                    return Response({
+                        'message': 'Account is temporarily locked due to multiple failed login attempts. Please try again later or reset your password.'
+                    }, status=status.HTTP_423_LOCKED)
+            except User.DoesNotExist:
+                pass
+
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data['user']
+
+            reset_login_attempts(user)
+
             tokens = get_tokens_for_user(user)
             user_data = UserSerializer(user).data
 
@@ -116,6 +142,24 @@ class UserLoginView(generics.GenericAPIView):
                 'user': user_data,
                 'tokens': tokens
             }, status=status.HTTP_200_OK)
+        else:
+            if email:
+                try:
+                    user = User.objects.get(email=email)
+                    lock_account(user)
+
+                    if user.failed_login_attempts >= 3:
+                        return Response({
+                            'message': 'Account locked due to multiple failed login attempts. Please reset your password or try again later.'
+                        }, status=status.HTTP_423_LOCKED)
+                    else:
+                        remaining_attempts = 3 - user.failed_login_attempts
+                        return Response({
+                            'message': f'Invalid credentials. {remaining_attempts} attempts remaining before account lock.',
+                            'attempts_remaining': remaining_attempts
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                except User.DoesNotExist:
+                    pass
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -232,12 +276,117 @@ class PasswordResetConfirmView(generics.GenericAPIView):
             try:
                 user = User.objects.get(email=email)
                 user.set_password(new_password)
+                reset_login_attempts(user)
                 user.save()
 
                 invalidate_reset_token(token)
 
                 return Response({
-                    'message': 'Password reset successful'
+                    'message': 'Password reset successful. Account unlocked.'
+                }, status=status.HTTP_200_OK)
+
+            except User.DoesNotExist:
+                return Response({
+                    'message': 'User not found'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmailVerificationView(generics.GenericAPIView):
+    serializer_class = EmailVerificationSerializer
+    permission_classes = [permissions.AllowAny]
+
+    @swagger_auto_schema(
+        operation_description="Verify email address with token",
+        security=[],
+        responses={
+            200: openapi.Response(
+                description="Email verified successfully",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'message': openapi.Schema(type=openapi.TYPE_STRING)
+                    }
+                )
+            ),
+            400: "Invalid or expired token"
+        }
+    )
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            token = serializer.validated_data['token']
+
+            email = verify_verification_token(token)
+            if not email:
+                return Response({
+                    'message': 'Invalid or expired verification token'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                user = User.objects.get(email=email)
+                if user.is_verified:
+                    return Response({
+                        'message': 'Email is already verified'
+                    }, status=status.HTTP_200_OK)
+
+                user.is_verified = True
+                user.save()
+
+                invalidate_verification_token(token)
+                send_welcome_email(user)
+
+                return Response({
+                    'message': 'Email verified successfully! Welcome email sent.'
+                }, status=status.HTTP_200_OK)
+
+            except User.DoesNotExist:
+                return Response({
+                    'message': 'User not found'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ResendVerificationView(generics.GenericAPIView):
+    serializer_class = ResendVerificationSerializer
+    permission_classes = [permissions.AllowAny]
+
+    @swagger_auto_schema(
+        operation_description="Resend email verification",
+        security=[],
+        responses={
+            200: openapi.Response(
+                description="Verification email sent",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'message': openapi.Schema(type=openapi.TYPE_STRING)
+                    }
+                )
+            ),
+            400: "Bad Request"
+        }
+    )
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+
+            try:
+                user = User.objects.get(email=email)
+                if user.is_verified:
+                    return Response({
+                        'message': 'Email is already verified'
+                    }, status=status.HTTP_200_OK)
+
+                verification_token = generate_verification_token()
+                store_verification_token(user.email, verification_token)
+                send_verification_email(user, verification_token, request)
+
+                return Response({
+                    'message': 'Verification email sent successfully'
                 }, status=status.HTTP_200_OK)
 
             except User.DoesNotExist:
